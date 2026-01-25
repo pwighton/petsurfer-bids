@@ -21,7 +21,12 @@ analysis. PETsurfer-BIDS is a BIDS app built on top of petprep
 divided between petsurfer-bids and petprep. petprep runs the
 pre-processing aspects (MC, PET-MRI registration, PVC, sampling to
 template spaces) whereas petsurfer-bids runs voxel-wise smoothing,
-kinetic modeling, and group analysis.
+kinetic modeling, and group analysis. If the kinetic modeling is
+invasive, then bloodstream can be run to create the arterial input
+function (AIF) used by PETsurfer kinetic modeling. The ultimate goal
+of this project is to allow users to put their PET data into BIDS
+format (or download PET data from OpenNeuro) and then provide
+end-to-end PET analysis through BIDS apps.
 
 
 PETsurfer wiki https://surfer.nmr.mgh.harvard.edu/fswiki/PetSurfer
