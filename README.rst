@@ -4,7 +4,7 @@ PETsurfer-BIDS
 This project is an encapsulation of the functionality in PETsurfer
 within an easy-to-use BIDS app.  PETSurfer is a set of tools within
 the FreeSurfer environement for end-to-end integrated MRI-PET
-analysis, including motion correction, PET-MRI registration,
+analysis, including motion correction (MC), PET-MRI registration,
 reference-region and invasive kinetic modeling, partial volume
 correction (PVC), MRI distortion correction, group analysis in ROI,
 volume, and surface spaces, and correction for multiple
@@ -15,12 +15,16 @@ via OpenNeuro. Software developers have exploited the BIDS structure
 to write analysis routines that seamlessly traverse through a BIDS
 tree, analyzing each data set found, and storing the result in BIDS
 format so that other applications can provide further
-analysis. PETsurfer-BIDS is a BIDS app built on top of petprep and
-bloodstream. 
+analysis. PETsurfer-BIDS is a BIDS app built on top of petprep
+(https://github.com/nipreps/petprep) and bloodstream
+(https://github.com/mathesong/bloodstream). PETsurfer functionality is
+divided between petsurfer-bids and petprep. petprep runs the
+pre-processing aspects (MC, PET-MRI registration, PVC, sampling to
+template spaces) whereas petsurfer-bids runs voxel-wise smoothing,
+kinetic modeling, and group analysis.
 
 
-
-`PETsurfer wiki <https://surfer.nmr.mgh.harvard.edu/fswiki/PetSurfer>_.
+PETsurfer wiki https://surfer.nmr.mgh.harvard.edu/fswiki/PetSurfer
 
 .. contents::
    :local:
