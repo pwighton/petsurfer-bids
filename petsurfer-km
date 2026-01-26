@@ -23,11 +23,10 @@ set threads = 1
 set volfwhm = 6
 set surffwhm = 5
 set pvc = ()
-set DoMRTM1 = 0
-set DoMRTM2 = 0
+set DoMRTM = 0
 set MRTMRef = (Left-Cerebellum-Cortex Right-Cerebellum-Cortex)
 set MRTMHB = (Left-Putamen Right-Putamen)
-set DoLogan = 1
+set DoLogan = 0
 set LoganTStar = 540;
 set bloodstreamdir = ()
 
@@ -96,7 +95,6 @@ endif
 
 #========================================================
 
-
 foreach s ($subjlist)
   foreach sess ($sesslist)
     set sessdir = $petsurferprepdir/$s/ses-$sess/pet
@@ -123,7 +121,7 @@ foreach s ($subjlist)
       if($status) goto error_exit
     endif
 
-    set volfwhmstr = `printf %02 $volfwhm`
+    set volfwhmstr = `printf %02d $volfwhm`
     set volsm = $outdir/mni152.sm$volfwhmstr.nii.gz
     set volmask = $outdir/mni152.mask.nii.gz
     if($DoVol) then
@@ -144,7 +142,7 @@ foreach s ($subjlist)
       endif
       set ud = `UpdateNeeded $volsm $mni $volmask`
       if($ud || $ForceUpdate) then      
-        if($volfwhm > 0)  set cmd = (mri_fwhm --fwhm $volfwhm --i $mni --o $volsm --mask $volmask)
+        if($volfwhm > 0)  set cmd = (mri_fwhm --fwhm $volfwhm --i $mni --o $volsm --mask $volmask --so)
         if($volfwhm == 0) set cmd = (mri_convert $mni $volsm)
         echo $cmd | tee -a $LF
         $cmd | tee -a $LF
@@ -152,7 +150,25 @@ foreach s ($subjlist)
       endif
     endif # DoVol
 
-    if($DoMRTM1) then
+    set surffwhmstr = `printf %02d $surffwhm`
+    if($DoSurf) then
+      foreach hemi ($hemilist)
+        if($hemi == lh) set hemistr = L
+        if($hemi == rh) set hemistr = R
+        set f = $sessdir/${sessid}_hemi-{$hemistr}_${pvc}space-fsaverage_pet.func.gii
+        set surfsm = $outdir/fsaverage.$hemi.sm$surffwhmstr.nii.gz
+        set ud = `UpdateNeeded $surfsm $f`
+        if($ud || $ForceUpdate) then
+          if($surffwhm >  0) set cmd = (mris_fwhm --s fsaverage --hemi $hemi --fwhm $surffwhm --cortex --i $f --o $surfsm --so)
+          if($surffwhm == 0) set cmd = (mri_convert $f $surfsm)
+          echo $cmd | tee -a $LF
+          $cmd | tee -a $LF
+          if($status) goto error_exit
+        endif
+      end #hemi
+    endif # DoSurf
+
+    if($DoMRTM) then
       set reftac = $outdir/ref-tac-petsurfer.dat
       set ud = `UpdateNeeded $reftac $tac`
       if($ud || $ForceUpdate) then
@@ -161,29 +177,70 @@ foreach s ($subjlist)
         $cmd | tee -a $LF
         if($status) goto error_exit
       endif
+    endif
 
+    if($DoMRTM == 2) then
+      # get k2prime
       set mrtm1hb = $outdir/mrtm1.hb
       set k2primedat = $mrtm1hb/k2prime.dat
-      if($DoMRTM2) then
-        # get k2prime
-        set hbtac = $outdir/hb-tac-petsurfer.dat
-        set ud = `UpdateNeeded $hbtac $tac`
-        if($ud || $ForceUpdate) then
-          set cmd = (tsv2petsurfer --tsv $tac --roiavg $MRTMHB --hb --o $hbtac)
-          echo $cmd | tee -a $LF
-          $cmd | tee -a $LF
-          if($status) goto error_exit
-        endif
-
-        set ud = `UpdateNeeded $k2primedat $hbtac $reftac`
-        if($ud || $ForceUpdate) then
-          set cmd = (mri_glmfit --table $hbtac --mrtm1 $reftac $frametime --o $mrtm1hb)
-          echo $cmd | tee -a $LF
-          $cmd | tee -a $LF
-          if($status) goto error_exit
-        endif
-        echo "k2prime `cat $k2primedat`" | tee -a $LF
+      set hbtac = $outdir/hb-tac-petsurfer.dat
+      set ud = `UpdateNeeded $hbtac $tac`
+      if($ud || $ForceUpdate) then
+        set cmd = (tsv2petsurfer --tsv $tac --roiavg $MRTMHB --hb --o $hbtac)
+        echo $cmd | tee -a $LF
+        $cmd | tee -a $LF
+        if($status) goto error_exit
       endif
+      set ud = `UpdateNeeded $k2primedat $hbtac $reftac`
+      if($ud || $ForceUpdate) then
+        set cmd = (mri_glmfit --table $hbtac --mrtm1 $reftac $frametime --o $mrtm1hb --nii.gz)
+        echo $cmd | tee -a $LF
+        $cmd | tee -a $LF
+        if($status) goto error_exit
+      endif
+      echo "k2prime `cat $k2primedat`" | tee -a $LF
+    endif
+
+    if($DoMRTM) then
+      set spacelist = (roi)
+      if($DoVol) set spacelist = ($spacelist mni)
+      if($DoSurf) then
+        foreach hemi ($hemilist)
+          set spacelist = ($spacelist fsaverage.$hemi)
+        end
+      endif
+      foreach space ($spacelist)
+        if($space == roi) then
+          set kmdir = $outdir/mrtm$DoMRTM.$space
+          set cmd = (mri_glmfit --table $pstab --o $kmdir)
+          set deps = ($pstab $reftac $frametime)
+        else if($space == mni) then
+          set kmdir = $outdir/mrtm$DoMRTM.$space.sm$volfwhmstr
+          set cmd = (mri_glmfit --y $volsm --o $kmdir  --mask $volmask)
+          set deps = ($volsm $volmask $reftac $frametime)
+        else 
+          set kmdir = $outdir/mrtm$DoMRTM.$space.sm$surffwhmstr
+          set surfsm = $outdir/$space.sm$surffwhmstr.nii.gz
+          set cmd = (mri_glmfit --y $surfsm --o $kmdir --cortex)
+          if($space == fsaverage.lh) set cmd = ($cmd --surf fsaverage lh)
+          if($space == fsaverage.rh) set cmd = ($cmd --surf fsaverage rh)
+          set deps = ($surfsm $reftac $frametime)
+        endif
+        if($DoMRTM == 2) then
+          set cmd = ($cmd --mrtm2 $reftac $frametime $k2primedat)
+          set deps = ($deps $k2primedat)
+        else
+          set cmd = ($cmd --mrtm1 $reftac $frametime)
+        endif
+        set cmd = ($cmd --nii.gz)
+        set bp = $kmdir/bp.nii.gz
+        set ud = `UpdateNeeded $bp $deps`
+        if($ud || $ForceUpdate) then
+          echo $cmd | tee -a $LF
+          $cmd | tee -a $LF
+          if($status) goto error_exit
+        endif
+      end
     endif
 
     if($DoLogan) then
@@ -202,12 +259,12 @@ foreach s ($subjlist)
       endif
 
       if($DoVol) then
-        if($DoLogan == 1) set logandir = $outdir/logan.mni
-        if($DoLogan == 2) set logandir = $outdir/logan-ma1.mni
+        if($DoLogan == 1) set logandir = $outdir/logan.mni.sm$volfwhm
+        if($DoLogan == 2) set logandir = $outdir/logan-ma1.mni.sm$volfwhm
         set dvr = $logandir/vt.nii.gz
         set ud = `UpdateNeeded $dvr $volsm $aif`
         if($ud || $ForceUpdate) then
-          set cmd = (mri_glmfit --y $volsm --o $logandir --nii.gz)
+          set cmd = (mri_glmfit --y $volsm --o $logandir --nii.gz --mask $volmask)
           if($DoLogan == 1) set cmd = ($cmd --logan $aif $frametime $LoganTStar)
           if($DoLogan == 2) set cmd = ($cmd --logan-ma1 $aif $frametime $LoganTStar)
           echo $cmd | tee -a $LF
@@ -215,37 +272,23 @@ foreach s ($subjlist)
           if($status) goto error_exit
         endif
       endif #Vol
-    endif #Logan
 
-    if($DoSurf) then
-      foreach hemi ($hemilist)
-        if($hemi == lh) set hemistr = L
-        if($hemi == rh) set hemistr = R
-        set f = $sessdir/${sessid}_hemi-{$hemistr}_${pvc}space-fsaverage_pet.func.gii
-        set surffwhmstr = `printf %02d $surffwhm`
-        set surfsm = $outdir/fsaverage.$hemi.sm$surffwhmstr.nii.gz
-        set ud = `UpdateNeeded $surfsm $f`
-        if($ud || $ForceUpdate) then
-          if($surffwhm >  0) set cmd = (mris_fwhm --s fsaverage --hemi $hemi --fwhm $surffwhm --cortex --i $f --o $surfsm)
-          if($surffwhm == 0) set cmd = (mri_convert $f $surfsm)
-          echo $cmd | tee -a $LF
-          $cmd | tee -a $LF
-          if($status) goto error_exit
-        endif
-        if($DoLogan == 1) set logandir = $outdir/logan.fsaverage.$hemi.sm$surffwhmstr
-        if($DoLogan == 2) set logandir = $outdir/logan-ma1.fsaverage.$hemi.sm$surffwhmstr
-        set dvr = $logandir/vt.nii.gz
-        set ud = `UpdateNeeded $dvr $surfsm $aif`
-        if($ud || $ForceUpdate) then
-          set cmd = (mri_glmfit --y $surfsm --surf fsaverage $hemi --o $logandir --nii.gz)
-          if($DoLogan == 1) set cmd = ($cmd --logan $aif $frametime $LoganTStar)
-          if($DoLogan == 2) set cmd = ($cmd --logan-ma1 $aif $frametime $LoganTStar)
-          echo $cmd | tee -a $LF
-          $cmd | tee -a $LF
-          if($status) goto error_exit
-        endif
-        
-      end
+      if($DoSurf) then
+        foreach hemi ($hemilist)
+          if($DoLogan == 1) set logandir = $outdir/logan.fsaverage.$hemi.sm$surffwhmstr
+          if($DoLogan == 2) set logandir = $outdir/logan-ma1.fsaverage.$hemi.sm$surffwhmstr
+          set dvr = $logandir/vt.nii.gz
+          set ud = `UpdateNeeded $dvr $surfsm $aif`
+          if($ud || $ForceUpdate) then
+            set cmd = (mri_glmfit --y $surfsm --surf fsaverage $hemi --o $logandir --nii.gz)
+            if($DoLogan == 1) set cmd = ($cmd --logan $aif $frametime $LoganTStar)
+            if($DoLogan == 2) set cmd = ($cmd --logan-ma1 $aif $frametime $LoganTStar)
+            echo $cmd | tee -a $LF
+            $cmd | tee -a $LF
+            if($status) goto error_exit
+          endif
+        end # hemi
+      endif #Surf
     endif # DoLogan
 
   end # session
@@ -369,27 +412,29 @@ while( $#argv != 0 )
 
     case "--mrtm1":
       if($#argv < 1) goto arg1err;
-      set DoMRTM1 = 1
-      set MRTMRef = ()
+      set DoMRTM = 1
+      set tmpMRTMRef = ()
       foreach arg ($argv)
         set c = `echo "$arg"|cut -c1-2`
         if("$c" == "--") break;
-        set MRTMRef = ($MRTMRef $arg)
+        set tmpMRTMRef = ($tmpMRTMRef $arg)
         shift;
       end
+      if($#tmpMRTMRef) set MRTMRef = ($tmpMRTMRef)
       echo "REF: $MRTMRef"
       breaksw
 
     case "--mrtm2":
       if($#argv < 1) goto arg1err;
-      set DoMRTM2 = 1
-      set MRTMHB = ()
+      set DoMRTM = 2
+      set tmpMRTMHB = ()
       foreach arg ($argv)
         set c = `echo "$arg"|cut -c1-2`
         if("$c" == "--") break;
-        set MRTMHB = ($MRTMHB $arg)
+        set tmpMRTMHB = ($tmpMRTMHB $arg)
         shift;
       end
+      if($#tmpMRTMHB) set tmpMRTMHB = ($tmpMRTMHB)
       echo "HB: $MRTMHB"
       breaksw
 
@@ -471,18 +516,13 @@ endif
 
 setenv SUBJECTS_DIR $FREESURFER/subjects
 
-if($DoMRTM1 == 0 && $DoMRTM2 == 0 && $DoLogan == 0) then
+if($DoMRTM == 0 && $DoLogan == 0) then
   echo "ERROR: nothing to do, spec --mrtm1 or --mrtm2 or --logan or --logan-ma1"
   exit 1
 endif
 
-if($DoMRTM1 != 0 && $DoLogan != 0) then
+if($DoMRTM != 0 && $DoLogan != 0) then
   echo "ERROR: cannot spec both mrtm and logan"
-  exit 1
-endif
-
-if($DoMRTM1 == 0 && $DoMRTM2 != 0) then
-  echo "ERROR: need --mrtm1 with --mrtm2"
   exit 1
 endif
 
@@ -549,7 +589,7 @@ usage_exit:
   echo ""
   echo "petsurfer-km : BIDS app to run invividual PETsurfer kinetic modeling after running petsurer-prep"
   echo " --bids bidsdir"
-  echo " --petsurferprep petsurferprepdir (default bidsdir/derivatives/petprep)"
+  echo " --petsurfer-prep petsurferprepdir (default bidsdir/derivatives/petprep)"
   #echo " --fsbids fsbidsdir (if diff than bidsdir)"
   echo " --s subject/participant (eg, sub-PS19)"
   echo " --v visit (eg, baseline)"
