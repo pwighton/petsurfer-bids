@@ -75,7 +75,7 @@ def run_bidsify(
         vol_key = f"{method}_mni_dir"
         if vol_key in temps:
             fwhm = int(args.vol_fwhm)
-            name = f"{prefix}_space-MNI152_desc-sm{fwhm}_model-{model}_meas-{meas}_mimap"
+            name = f"{prefix}_space-MNI152NLin2009cAsym_desc-sm{fwhm}_model-{model}_meas-{meas}_mimap"
             _copy_nifti(temps[vol_key] / map_file, output_pet_dir / f"{name}.nii.gz")
             _write_json(output_pet_dir / f"{name}.json", {
                 **sidecar,
