@@ -18,10 +18,8 @@ class InputGroup:
 
     # PETPrep outputs
     pet_mni: Path | None = None  # Volumetric PET in MNI space
-    pet_fsnative_lh: Path | None = None  # Surface PET, left hemisphere, native
-    pet_fsnative_rh: Path | None = None  # Surface PET, right hemisphere, native
-    pet_fsaverage_lh: Path | None = None  # Surface PET, left hemisphere, fsaverage
-    pet_fsaverage_rh: Path | None = None  # Surface PET, right hemisphere, fsaverage
+    pet_fsaverage_lh: Path | None = None  # Surface PET, left hemisphere
+    pet_fsaverage_rh: Path | None = None  # Surface PET, right hemisphere
     tacs: Path | None = None  # Tissue activity curves (GTM)
 
     # Bloodstream outputs
@@ -77,8 +75,6 @@ def _find_petprep_files(
 
     files = {
         "pet_mni": None,
-        "pet_fsnative_lh": None,
-        "pet_fsnative_rh": None,
         "pet_fsaverage_lh": None,
         "pet_fsaverage_rh": None,
         "tacs": None,
@@ -99,20 +95,6 @@ def _find_petprep_files(
 
     # Find surface PET files (.func.gii extension)
     for hemi, hemi_key in [("L", "lh"), ("R", "rh")]:
-        # Native surface
-        fsnative = layout.get(
-            **base_query,
-            extension=".func.gii",
-            hemi=hemi,
-            space="fsnative",
-            suffix="pet",
-            return_type="filename",
-            invalid_filters="allow",
-        )
-        if fsnative:
-            files[f"pet_fsnative_{hemi_key}"] = Path(fsnative[0])
-
-        # fsaverage surface
         fsaverage = layout.get(
             **base_query,
             extension=".func.gii",
@@ -125,7 +107,7 @@ def _find_petprep_files(
         if fsaverage:
             files[f"pet_fsaverage_{hemi_key}"] = Path(fsaverage[0])
 
-    # Find tissue activity curves
+    # Find time activity curves
     tacs_query = {"subject": subject, "extension": ".tsv"}
     if session:
         tacs_query["session"] = session
@@ -249,8 +231,6 @@ def discover_inputs(
             # Find petprep files
             petprep_files = _find_petprep_files(petprep_layout, subject, session, pvc)
             group.pet_mni = petprep_files["pet_mni"]
-            group.pet_fsnative_lh = petprep_files["pet_fsnative_lh"]
-            group.pet_fsnative_rh = petprep_files["pet_fsnative_rh"]
             group.pet_fsaverage_lh = petprep_files["pet_fsaverage_lh"]
             group.pet_fsaverage_rh = petprep_files["pet_fsaverage_rh"]
             group.tacs = petprep_files["tacs"]
