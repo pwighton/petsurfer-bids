@@ -1,5 +1,5 @@
 IMAGE_NAME := freesurfer/petsurfer-bids
-TAG := latest
+TAG := $(shell python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
 
 .PHONY: docker
 
