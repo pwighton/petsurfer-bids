@@ -147,23 +147,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def process_subject(
-    group: InputGroup,
+    input_group: InputGroup,
     args: argparse.Namespace,
-    command_history: list[tuple[str, str]],
 ) -> None:
     """
     Process a single subject/session.
 
     Args:
-        group: InputGroup with paths to input files.
+        input_group: InputGroup with paths to input files.
         args: Parsed command-line arguments.
-        command_history: List to append (description, command) tuples.
 
     Raises:
         RuntimeError: If processing fails.
     """
-    subject = group.subject
-    session = group.session
+    subject = input_group.subject
+    session = input_group.session
 
     # Create subject working directory
     if session:
@@ -172,16 +170,25 @@ def process_subject(
         subject_workdir = args.work_dir / f"sub-{subject}"
 
     subject_workdir.mkdir(parents=True, exist_ok=True)
-    logger.debug(f"Working directory: {subject_workdir}")
+    logger.info(f"Current working directory: {subject_workdir}")
 
     # Initialize temps dict for tracking intermediate files
     temps: dict[str, Path] = {}
 
+    # Initialize command history for this subject
+    command_history: list[tuple[str, str]] = []
+
     # Run processing steps
-    run_preprocessing(subject, session, group, temps, subject_workdir, command_history)
-    run_volumetric(subject, session, group, temps, subject_workdir, command_history, args)
-    run_surface(subject, session, group, temps, subject_workdir, command_history, args)
-    run_kinetic_modeling(subject, session, group, temps, subject_workdir, command_history, args)
+    run_preprocessing(subject, session, input_group, temps, subject_workdir, command_history)
+    run_volumetric(subject, session, input_group, temps, subject_workdir, command_history, args)
+    run_surface(subject, session, input_group, temps, subject_workdir, command_history, args)
+    run_kinetic_modeling(subject, session, input_group, temps, subject_workdir, command_history, args)
+
+    # Log command history for this subject
+    #if command_history:
+    #    logger.debug(f"Commands executed for {input_group.label}:")
+    #    for description, command in command_history:
+    #        logger.debug(f"  {description}: {command}")
 
 
 def run(args: argparse.Namespace) -> int:
@@ -239,21 +246,20 @@ def run(args: argparse.Namespace) -> int:
 
     # Create working directory
     args.work_dir.mkdir(parents=True, exist_ok=True)
-    logger.debug(f"Created working directory: {args.work_dir}")
+    logger.info(f"Created working directory: {args.work_dir}")
 
-    # Track command history and processing results
-    command_history: list[tuple[str, str]] = []
+    # Track processing results
     failed_subjects: list[str] = []
     successful_subjects: list[str] = []
 
     # Process each subject/session
-    for group in input_groups:
+    for input_group in input_groups:
         try:
-            process_subject(group, args, command_history)
-            successful_subjects.append(group.label)
+            process_subject(input_group, args)
+            successful_subjects.append(input_group.label)
         except Exception as e:
-            failed_subjects.append(group.label)
-            logger.error(f"Failed to process {group.label}: {e}")
+            failed_subjects.append(input_group.label)
+            logger.error(f"Failed to process {input_group.label}: {e}")
             if args.abort_on_error:
                 logger.error("Aborting due to --abort-on-error")
                 break
@@ -263,12 +269,6 @@ def run(args: argparse.Namespace) -> int:
         logger.info(f"Successfully processed: {', '.join(successful_subjects)}")
     if failed_subjects:
         logger.error(f"Failed to process: {', '.join(failed_subjects)}")
-
-    # Log command history
-    if command_history:
-        logger.debug("Commands executed:")
-        for description, command in command_history:
-            logger.debug(f"  {description}: {command}")
 
     # Cleanup
     if args.nocleanup:
