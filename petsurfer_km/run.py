@@ -237,6 +237,7 @@ def run(args: argparse.Namespace) -> int:
         session_label=args.session_label,
         require_input_function=require_input_function,
         pvc=args.pvc,
+        bids_dir=args.bids_dir,
     )
 
     if not input_groups:

@@ -1,6 +1,8 @@
 """Input file discovery and grouping using pybids."""
 
+import json
 import logging
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -15,6 +17,7 @@ class InputGroup:
 
     subject: str
     session: str | None
+    tracer: str | None = None  # BIDS-safe tracer label (e.g., "11CPS13")
 
     # PETPrep outputs
     pet_mni: Path | None = None  # Volumetric PET in MNI space
@@ -30,10 +33,13 @@ class InputGroup:
 
     @property
     def label(self) -> str:
-        """Return a label for this group (sub-XX[_ses-YY])."""
+        """Return a label for this group (sub-XX[_ses-YY][_trc-ZZ])."""
+        parts = [f"sub-{self.subject}"]
         if self.session:
-            return f"sub-{self.subject}_ses-{self.session}"
-        return f"sub-{self.subject}"
+            parts.append(f"ses-{self.session}")
+        if self.tracer:
+            parts.append(f"trc-{self.tracer}")
+        return "_".join(parts)
 
     def has_volumetric(self) -> bool:
         """Check if volumetric inputs are available."""
@@ -58,6 +64,78 @@ class InputGroup:
         if require_input_function:
             return has_pet and self.has_input_function()
         return has_pet
+
+
+def _tracer_to_bids_label(tracer_name: str) -> str:
+    """Convert a TracerName string to a BIDS-safe trc label.
+
+    Removes brackets and non-alphanumeric characters.
+
+    Examples:
+        "[11C]PS13"       -> "11CPS13"
+        "[18F]FDG"        -> "18FFDG"
+        "[11C]raclopride" -> "11Craclopride"
+    """
+    return re.sub(r"[^a-zA-Z0-9]", "", tracer_name)
+
+
+def _extract_tracer(
+    bids_dir: Path,
+    subject: str,
+    session: str | None,
+) -> str | None:
+    """Extract tracer label from the raw BIDS PET JSON sidecar.
+
+    Checks two sources in order:
+    1. The ``trc`` entity in the PET filename (for multi-tracer datasets).
+    2. The ``TracerName`` field inside the JSON sidecar.
+
+    Args:
+        bids_dir: Root of the raw BIDS dataset.
+        subject: Subject label (without ``sub-`` prefix).
+        session: Session label (without ``ses-`` prefix), or None.
+
+    Returns:
+        BIDS-safe tracer label, or None if not found.
+    """
+    if session:
+        pet_dir = bids_dir / f"sub-{subject}" / f"ses-{session}" / "pet"
+    else:
+        pet_dir = bids_dir / f"sub-{subject}" / "pet"
+
+    if not pet_dir.exists():
+        logger.debug(f"No PET directory found at {pet_dir}")
+        return None
+
+    json_files = sorted(pet_dir.glob("*_pet.json"))
+    if not json_files:
+        logger.debug(f"No PET JSON sidecars found in {pet_dir}")
+        return None
+
+    # Check for trc entity in the filename
+    filename = json_files[0].name
+    match = re.search(r"_trc-([a-zA-Z0-9]+)", filename)
+    if match:
+        tracer = match.group(1)
+        logger.debug(f"Tracer from filename entity: {tracer}")
+        return tracer
+
+    # Read TracerName from JSON metadata
+    try:
+        with open(json_files[0]) as f:
+            metadata = json.load(f)
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning(f"Could not read PET JSON sidecar {json_files[0]}: {e}")
+        return None
+
+    tracer_name = metadata.get("TracerName")
+    if tracer_name:
+        tracer = _tracer_to_bids_label(tracer_name)
+        logger.debug(f"Tracer from JSON TracerName '{tracer_name}': {tracer}")
+        return tracer
+
+    logger.warn("No tracer information found in PET sidecar {json_files[0]}")
+    return None
 
 
 def _find_petprep_files(
@@ -151,6 +229,7 @@ def discover_inputs(
     session_label: list[str] | None = None,
     require_input_function: bool = False,
     pvc: str | None = None,
+    bids_dir: Path | None = None,
 ) -> list[InputGroup]:
     """
     Discover and group input files from petprep and bloodstream derivatives.
@@ -163,6 +242,8 @@ def discover_inputs(
         require_input_function: Whether input function is required (for Logan).
         pvc: Partial volume correction method (e.g., "MG"). If specified,
             only files with matching pvc entity will be selected.
+        bids_dir: Root of the raw BIDS dataset. Used to extract tracer
+            information from PET JSON sidecars.
 
     Returns:
         List of InputGroup objects for valid subject/session combinations.
@@ -227,6 +308,10 @@ def discover_inputs(
     for subject in subjects:
         for session in all_sessions:
             group = InputGroup(subject=subject, session=session)
+
+            # Extract tracer from raw BIDS PET sidecar
+            if bids_dir:
+                group.tracer = _extract_tracer(bids_dir, subject, session)
 
             # Find petprep files
             petprep_files = _find_petprep_files(petprep_layout, subject, session, pvc)
