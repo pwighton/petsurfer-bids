@@ -186,6 +186,7 @@ def run(args: Namespace) -> int:
         participant_label=args.participant_label,
         session_label=args.session_label,
         require_input_function=require_input_function,
+        pvc=args.pvc,
     )
 
     if not input_groups:

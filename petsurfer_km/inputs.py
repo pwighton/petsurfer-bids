@@ -66,11 +66,14 @@ def _find_petprep_files(
     layout: BIDSLayout,
     subject: str,
     session: str | None,
+    pvc: str | None = None,
 ) -> dict:
     """Find PETPrep output files for a subject/session."""
     base_query = {"subject": subject}
     if session:
         base_query["session"] = session
+    if pvc:
+        base_query["pvc"] = pvc
 
     files = {
         "pet_mni": None,
@@ -89,6 +92,7 @@ def _find_petprep_files(
         suffix="pet",
         desc="preproc",
         return_type="filename",
+        invalid_filters="allow",
     )
     if mni_files:
         files["pet_mni"] = Path(mni_files[0])
@@ -103,6 +107,7 @@ def _find_petprep_files(
             space="fsnative",
             suffix="pet",
             return_type="filename",
+            invalid_filters="allow",
         )
         if fsnative:
             files[f"pet_fsnative_{hemi_key}"] = Path(fsnative[0])
@@ -115,6 +120,7 @@ def _find_petprep_files(
             space="fsaverage",
             suffix="pet",
             return_type="filename",
+            invalid_filters="allow",
         )
         if fsaverage:
             files[f"pet_fsaverage_{hemi_key}"] = Path(fsaverage[0])
@@ -123,10 +129,13 @@ def _find_petprep_files(
     tacs_query = {"subject": subject, "extension": ".tsv"}
     if session:
         tacs_query["session"] = session
+    if pvc:
+        tacs_query["pvc"] = pvc
     tacs_files = layout.get(
         **tacs_query,
         suffix="tacs",
         return_type="filename",
+        invalid_filters="allow",
     )
     if tacs_files:
         files["tacs"] = Path(tacs_files[0])
@@ -159,6 +168,7 @@ def discover_inputs(
     participant_label: list[str] | None = None,
     session_label: list[str] | None = None,
     require_input_function: bool = False,
+    pvc: str | None = None,
 ) -> list[InputGroup]:
     """
     Discover and group input files from petprep and bloodstream derivatives.
@@ -169,10 +179,14 @@ def discover_inputs(
         participant_label: List of subjects to include (None = all).
         session_label: List of sessions to include (None = all).
         require_input_function: Whether input function is required (for Logan).
+        pvc: Partial volume correction method (e.g., "MG"). If specified,
+            only files with matching pvc entity will be selected.
 
     Returns:
         List of InputGroup objects for valid subject/session combinations.
     """
+    if pvc:
+        logger.info(f"Filtering for PVC method: {pvc}")
     logger.debug(f"Loading petprep layout from: {petprep_dir}")
     petprep_layout = BIDSLayout(
         petprep_dir,
@@ -233,7 +247,7 @@ def discover_inputs(
             group = InputGroup(subject=subject, session=session)
 
             # Find petprep files
-            petprep_files = _find_petprep_files(petprep_layout, subject, session)
+            petprep_files = _find_petprep_files(petprep_layout, subject, session, pvc)
             group.pet_mni = petprep_files["pet_mni"]
             group.pet_fsnative_lh = petprep_files["pet_fsnative_lh"]
             group.pet_fsnative_rh = petprep_files["pet_fsnative_rh"]
