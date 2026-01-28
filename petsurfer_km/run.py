@@ -10,6 +10,7 @@ from petsurfer_km import __version__
 from petsurfer_km.cli.parser import build_parser
 from petsurfer_km.inputs import InputGroup, discover_inputs
 from petsurfer_km.steps import (
+    run_bidsify,
     run_kinetic_modeling,
     run_preprocessing,
     run_surface,
@@ -184,6 +185,7 @@ def process_subject(
     run_volumetric(subject, session, input_group, temps, subject_workdir, command_history, args)
     run_surface(subject, session, input_group, temps, subject_workdir, command_history, args)
     run_kinetic_modeling(subject, session, input_group, temps, subject_workdir, command_history, args)
+    
 
     logger.debug(f"Temporary files at the end of the processing steps for {input_group.label}: {temps}")
 
@@ -191,6 +193,9 @@ def process_subject(
         logger.debug(f"Commands executed for {input_group.label}:")
         for description, command in command_history:
             logger.debug(f"  {description}: {command}")
+
+    # Copy files to output directory and BIDSify
+    run_bidsify(subject, session, input_group, temps, subject_workdir, command_history, args)
 
 def run(args: argparse.Namespace) -> int:
     """
