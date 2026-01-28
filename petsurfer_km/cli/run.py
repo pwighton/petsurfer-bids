@@ -6,6 +6,7 @@ from argparse import Namespace
 from pathlib import Path
 
 from petsurfer_km.cli.parser import build_parser
+from petsurfer_km.inputs import discover_inputs
 
 logger = logging.getLogger("petsurfer_km")
 
@@ -155,9 +156,6 @@ def run(args: Namespace) -> int:
     Returns:
         Exit code (0 for success, non-zero for errors).
     """
-    # TODO: Implement actual processing logic
-    # This is a stub for now - will be implemented in subsequent tasks
-
     logger.debug(f"BIDS directory: {args.bids_dir}")
     logger.debug(f"Output directory: {args.output_dir}")
     logger.debug(f"Analysis level: {args.analysis_level}")
@@ -176,6 +174,26 @@ def run(args: Namespace) -> int:
     logger.debug(f"Skip volumetric: {args.no_vol}")
     logger.debug(f"Skip surface: {args.no_surf}")
 
+    # Determine if input function is required (for Logan methods)
+    logan_methods = {"logan", "logan-ma1"}
+    require_input_function = bool(logan_methods.intersection(args.km_method))
+
+    # Discover input files
+    input_groups = discover_inputs(
+        petprep_dir=args.petprep_dir,
+        bloodstream_dir=args.bloodstream_dir,
+        participant_label=args.participant_label,
+        session_label=args.session_label,
+        require_input_function=require_input_function,
+    )
+
+    if not input_groups:
+        logger.error("No valid input groups found. Nothing to process.")
+        return 1
+
+    logger.debug(f"Will process {len(input_groups)} subject/session combinations")
+
+    # TODO: Implement actual processing logic
     logger.warning("Processing not yet implemented")
     return 0
 
