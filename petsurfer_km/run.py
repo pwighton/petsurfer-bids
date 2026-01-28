@@ -160,6 +160,7 @@ def process_subject(
     Raises:
         RuntimeError: If processing fails.
     """
+    logger.info(f"Processing: {input_group.label}")
     subject = input_group.subject
     session = input_group.session
 
@@ -184,13 +185,12 @@ def process_subject(
     run_surface(subject, session, input_group, temps, subject_workdir, command_history, args)
     run_kinetic_modeling(subject, session, input_group, temps, subject_workdir, command_history, args)
 
-    logger.debug(f"Temporary files at the end of the processing steps: {temps}")
-    # Log command history for this subject
-    #if command_history:
-    #    logger.debug(f"Commands executed for {input_group.label}:")
-    #    for description, command in command_history:
-    #        logger.debug(f"  {description}: {command}")
+    logger.debug(f"Temporary files at the end of the processing steps for {input_group.label}: {temps}")
 
+    if command_history:
+        logger.debug(f"Commands executed for {input_group.label}:")
+        for description, command in command_history:
+            logger.debug(f"  {description}: {command}")
 
 def run(args: argparse.Namespace) -> int:
     """
