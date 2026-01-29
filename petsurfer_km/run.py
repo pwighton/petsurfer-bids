@@ -13,6 +13,7 @@ from petsurfer_km.steps import (
     run_bidsify,
     run_kinetic_modeling,
     run_preprocessing,
+    run_report,
     run_surface,
     run_volumetric,
 )
@@ -196,6 +197,9 @@ def process_subject(
 
     # Copy files to output directory and BIDSify
     run_bidsify(subject, session, input_group, temps, subject_workdir, command_history, args)
+
+    # Generate per-subject HTML report
+    run_report(subject, session, input_group, temps, subject_workdir, command_history, args)
 
 def run(args: argparse.Namespace) -> int:
     """

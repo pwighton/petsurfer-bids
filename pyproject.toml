@@ -25,6 +25,9 @@ classifiers = [
 dependencies = [
     "pybids>=0.16.0",
     "numpy",
+    "nilearn>=0.10.1",
+    "matplotlib>=3.6",
+    "templateflow>=23.1",
 ]
 
 [project.optional-dependencies]
