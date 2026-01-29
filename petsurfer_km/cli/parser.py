@@ -236,6 +236,11 @@ Examples:
         help="Delete temporary files after processing (default behavior).",
     )
     proc_group.add_argument(
+        "--no-freebrowse",
+        action="store_true",
+        help="Do not generate interactive freebrowse viewers for volumetric maps.",
+    )
+    proc_group.add_argument(
         "--abort-on-error",
         action="store_true",
         help="Abort processing if any subject fails. Default: log error and continue.",

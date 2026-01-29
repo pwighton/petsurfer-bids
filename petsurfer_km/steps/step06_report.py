@@ -12,6 +12,8 @@ Visualisations are created with nilearn and saved as SVG in
 ``<output_dir>/sub-XX/figures/``.
 """
 
+import importlib.util
+import json
 import logging
 import shutil
 import sys
@@ -43,6 +45,95 @@ MEAS_LABELS = {
 }
 
 HEMI_BIDS = {"lh": "L", "rh": "R"}
+
+# ---------------------------------------------------------------------------
+# Freebrowse helpers
+# ---------------------------------------------------------------------------
+
+_FREEBROWSE_DIR = Path(__file__).resolve().parent.parent / "freebrowse"
+
+# Module-level caches (populated on first use)
+_freebrowse_html_cache: str | None = None
+_nvd_create_mod = None
+_nvd_embed_mod = None
+
+
+def _import_module(name: str, path: Path):
+    """Import a Python module from an arbitrary file path (handles hyphens)."""
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _get_freebrowse_modules():
+    """Return (nvd_create_mod, nvd_embed_mod), importing on first call."""
+    global _nvd_create_mod, _nvd_embed_mod
+    if _nvd_create_mod is None:
+        _nvd_create_mod = _import_module("nvd_create", _FREEBROWSE_DIR / "nvd-create.py")
+    if _nvd_embed_mod is None:
+        _nvd_embed_mod = _import_module("nvd_embed", _FREEBROWSE_DIR / "nvd-embed.py")
+    return _nvd_create_mod, _nvd_embed_mod
+
+
+def _get_freebrowse_html() -> str:
+    """Return the freebrowse HTML content, reading from disk on first call."""
+    global _freebrowse_html_cache
+    if _freebrowse_html_cache is None:
+        html_path = _FREEBROWSE_DIR / "freebrowse-2.2.1.html"
+        _freebrowse_html_cache = html_path.read_text(encoding="utf-8")
+    return _freebrowse_html_cache
+
+
+def _generate_freebrowse_viewer(
+    bids_mimap: Path,
+    template_path: Path,
+    vlim: tuple[float, float],
+    output_html: Path,
+    workdir: Path,
+) -> None:
+    """Generate a self-contained freebrowse HTML viewer for a volumetric map.
+
+    Args:
+        bids_mimap: Path to the BIDS output mimap.nii.gz.
+        template_path: Path to the MNI152 T1w template NIfTI.
+        vlim: (vmin, vmax) display limits for the overlay colormap.
+        output_html: Where to write the final self-contained HTML.
+        workdir: Working directory for temporary files.
+    """
+    nvd_create_mod, nvd_embed_mod = _get_freebrowse_modules()
+
+    # Load and adjust the NVD template
+    nvd_template_path = _FREEBROWSE_DIR / "templates" / "petsurfer-km-template.nvd"
+    with open(nvd_template_path) as f:
+        nvd_template = json.load(f)
+
+    # Set overlay colour limits from the robust vlim
+    nvd_template["imageOptionsArray"][1]["cal_min"] = vlim[0]
+    nvd_template["imageOptionsArray"][1]["cal_max"] = vlim[1]
+
+    # Write adjusted template to workdir
+    adjusted_template = workdir / "freebrowse-template.nvd"
+    with open(adjusted_template, "w") as f:
+        json.dump(nvd_template, f, indent=2)
+
+    # Create NVD document with embedded image data
+    nvd = nvd_create_mod.create_nvd(
+        [str(template_path), str(bids_mimap)],
+        template_path=str(adjusted_template),
+    )
+    nvd_json = json.dumps(nvd)
+
+    # Embed into freebrowse HTML
+    html_content = _get_freebrowse_html()
+    output_content = nvd_embed_mod.embed_nvd(html_content, nvd_json)
+
+    # Write final self-contained HTML
+    output_html.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_html, "w", encoding="utf-8") as f:
+        f.write(output_content)
+
+    logger.debug(f"Freebrowse viewer saved: {output_html}")
 
 
 # ---------------------------------------------------------------------------
@@ -112,11 +203,65 @@ def run_report(
                 fig_path = figures_dir / fig_name
                 _generate_volume_figure(vol_map, template_path, fig_path, meas)
                 rel = f"{fig_rel_dir}/{fig_name}"
-                method_figures.append(
+                vol_html = (
                     f'<h5>Volumetric (MNI152)</h5>\n'
                     f'<img src="./{escape(rel)}" class="img-fluid mb-3" '
                     f'alt="{model} {meas} MNI152">'
                 )
+
+                # --- Freebrowse viewer ---
+                if not getattr(args, "no_freebrowse", False) and template_path is not None:
+                    try:
+                        # Construct BIDS output path for mimap.nii.gz
+                        pet_dir = output_dir / f"sub-{subject}"
+                        if session:
+                            pet_dir = pet_dir / f"ses-{session}"
+                        pet_dir = pet_dir / "pet"
+                        fwhm = int(args.vol_fwhm)
+                        bids_name = (
+                            f"{prefix}_space-MNI152NLin2009cAsym_desc-sm{fwhm}"
+                            f"_model-{model}_meas-{meas}_mimap.nii.gz"
+                        )
+                        bids_mimap = pet_dir / bids_name
+
+                        if bids_mimap.exists():
+                            # Compute robust vlim from workdir map (same data)
+                            import nibabel as nib
+                            import numpy as np
+
+                            img = nib.load(str(vol_map))
+                            data = np.asarray(img.dataobj)
+                            vlim = _robust_vlim(data)
+
+                            if vlim is not None:
+                                fb_name = (
+                                    f"{prefix}_model-{model}_meas-{meas}"
+                                    f"_space-MNI152NLin2009cAsym_mimap.html"
+                                )
+                                fb_path = figures_dir / fb_name
+                                _generate_freebrowse_viewer(
+                                    bids_mimap=bids_mimap,
+                                    template_path=template_path,
+                                    vlim=vlim,
+                                    output_html=fb_path,
+                                    workdir=workdir,
+                                )
+                                fb_rel = f"{fig_rel_dir}/{fb_name}"
+                                vol_html += (
+                                    f'\n<br><a href="./{escape(fb_rel)}" '
+                                    f'target="_blank">View results in freebrowse</a>'
+                                )
+                        else:
+                            logger.debug(
+                                f"BIDS mimap not found for freebrowse: {bids_mimap}"
+                            )
+                    except Exception as exc:
+                        logger.warning(
+                            f"Could not generate freebrowse viewer for "
+                            f"{model} {meas}: {exc}"
+                        )
+
+                method_figures.append(vol_html)
 
         # --- Surface figures ---
         for hemi in ("lh", "rh"):
