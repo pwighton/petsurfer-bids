@@ -13,6 +13,7 @@ Visualisations are created with nilearn and saved as SVG in
 """
 
 import logging
+import shutil
 import sys
 from argparse import Namespace
 from html import escape
@@ -84,6 +85,9 @@ def run_report(
     # Fetch MNI template (once, with graceful fallback)
     template_path = _fetch_mni_template()
     template_warning = template_path is None
+
+    # Copy templates into sourcedata/ (idempotent)
+    _ensure_sourcedata(output_dir, template_path)
 
     # Generate figures and collect paths (relative to output_dir)
     figure_sections: list[str] = []
@@ -207,6 +211,52 @@ def _fetch_mni_template() -> Path | None:
         logger.warning(f"Could not fetch MNI152 template: {exc}")
 
     return None
+
+
+# ---------------------------------------------------------------------------
+# Sourcedata helpers
+# ---------------------------------------------------------------------------
+
+
+def _ensure_sourcedata(output_dir: Path, template_path: Path | None) -> None:
+    """Copy fetched templates into ``<output_dir>/sourcedata/``.
+
+    Mirrors the petprep convention:
+
+    - ``sourcedata/tpl-MNI152NLin2009cAsym/`` — the T1w template file
+    - ``sourcedata/freesurfer/fsaverage/`` — nilearn's fsaverage meshes
+
+    Idempotent: skips files that already exist.
+    """
+    sourcedata = output_dir / "sourcedata"
+
+    # --- MNI152 template ---
+    if template_path is not None:
+        tpl_dest = sourcedata / "tpl-MNI152NLin2009cAsym" / template_path.name
+        if not tpl_dest.exists():
+            tpl_dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(template_path, tpl_dest)
+            logger.info(f"Copied MNI152 template to {tpl_dest}")
+
+    # --- fsaverage meshes ---
+    try:
+        from nilearn.datasets import fetch_surf_fsaverage
+
+        fsaverage = fetch_surf_fsaverage(mesh="fsaverage")
+        fs_dest = sourcedata / "freesurfer" / "fsaverage"
+        fs_dest.mkdir(parents=True, exist_ok=True)
+
+        # Only copy the meshes and background maps used for plotting
+        used_keys = ("pial_left", "pial_right", "sulc_left", "sulc_right")
+        for key in used_keys:
+            src = Path(fsaverage[key])
+            if src.is_file():
+                dst = fs_dest / src.name
+                if not dst.exists():
+                    shutil.copy2(src, dst)
+        logger.info(f"Copied fsaverage meshes to {fs_dest}")
+    except Exception as exc:
+        logger.warning(f"Could not copy fsaverage to sourcedata: {exc}")
 
 
 # ---------------------------------------------------------------------------
