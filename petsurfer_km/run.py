@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -95,8 +96,6 @@ def validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser) -> 
 
 def set_defaults(args: argparse.Namespace) -> argparse.Namespace:
     """Set default values that depend on other arguments."""
-    import os
-
     # Set default petprep-dir
     if args.petprep_dir is None:
         args.petprep_dir = args.bids_dir / "derivatives" / "petprep"
@@ -201,6 +200,50 @@ def process_subject(
     # Generate per-subject HTML report
     run_report(subject, session, input_group, temps, subject_workdir, command_history, args)
 
+def ensure_fsaverage() -> None:
+    """
+    Ensure fsaverage exists under $SUBJECTS_DIR.
+
+    If fsaverage is not found under $SUBJECTS_DIR, copy it from
+    $FREESURFER_HOME/subjects/fsaverage. This is needed because FreeSurfer
+    commands like mris_fwhm and mri_glmfit resolve the fsaverage subject
+    via $SUBJECTS_DIR, which may not contain fsaverage outside the container.
+
+    Raises:
+        RuntimeError: If SUBJECTS_DIR or FREESURFER_HOME are not set, or
+            if fsaverage cannot be found or copied.
+    """
+    subjects_dir = os.environ.get("SUBJECTS_DIR")
+    if not subjects_dir:
+        raise RuntimeError(
+            "SUBJECTS_DIR environment variable is not set. "
+            "Please source your FreeSurfer environment."
+        )
+
+    fsaverage_dst = Path(subjects_dir) / "fsaverage"
+    if fsaverage_dst.exists():
+        logger.debug(f"fsaverage found at: {fsaverage_dst}")
+        return
+
+    freesurfer_home = os.environ.get("FREESURFER_HOME")
+    if not freesurfer_home:
+        raise RuntimeError(
+            f"fsaverage not found in SUBJECTS_DIR ({subjects_dir}) and "
+            "FREESURFER_HOME is not set. Cannot locate fsaverage."
+        )
+
+    fsaverage_src = Path(freesurfer_home) / "subjects" / "fsaverage"
+    if not fsaverage_src.exists():
+        raise RuntimeError(
+            f"fsaverage not found in SUBJECTS_DIR ({subjects_dir}) or "
+            f"FREESURFER_HOME/subjects ({fsaverage_src})."
+        )
+
+    logger.info(f"Copying fsaverage from {fsaverage_src} to {fsaverage_dst}")
+    shutil.copytree(fsaverage_src, fsaverage_dst)
+    logger.info("fsaverage copied successfully")
+
+
 def run(args: argparse.Namespace) -> int:
     """
     Execute petsurfer-km processing.
@@ -258,6 +301,9 @@ def run(args: argparse.Namespace) -> int:
     # Create working directory
     args.work_dir.mkdir(parents=True, exist_ok=True)
     logger.info(f"Created working directory: {args.work_dir}")
+
+    # Ensure fsaverage is available under SUBJECTS_DIR
+    ensure_fsaverage()
 
     # Track processing results
     failed_subjects: list[str] = []
