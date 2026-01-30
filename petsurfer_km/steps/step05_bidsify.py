@@ -66,6 +66,9 @@ def run_bidsify(
     _ensure_dataset_description(args.output_dir, args.petprep_dir)
     prefix = _build_prefix(inputs)
 
+    # Subject/session output dir (parent of pet/) for relative path computation
+    subject_outdir = output_pet_dir.parent
+
     for method in args.km_method:
         model = MODEL_LABELS[method]
         meas = MEAS_LABELS[method]
@@ -82,7 +85,7 @@ def run_bidsify(
             dst_nifti = output_pet_dir / f"{name}.nii.gz"
             _copy_nifti(src_nifti, dst_nifti)
             if file_mappings is not None and dst_nifti.exists():
-                _record_mapping(file_mappings, src_nifti, dst_nifti, workdir, args.output_dir)
+                _record_mapping(file_mappings, src_nifti, dst_nifti, workdir, subject_outdir)
             _write_json(output_pet_dir / f"{name}.json", {
                 **sidecar,
                 "Description": (
@@ -105,7 +108,7 @@ def run_bidsify(
                 dst_nifti = output_pet_dir / f"{name}.nii.gz"
                 _copy_nifti(src_nifti, dst_nifti)
                 if file_mappings is not None and dst_nifti.exists():
-                    _record_mapping(file_mappings, src_nifti, dst_nifti, workdir, args.output_dir)
+                    _record_mapping(file_mappings, src_nifti, dst_nifti, workdir, subject_outdir)
                 _write_json(output_pet_dir / f"{name}.json", {
                     **sidecar,
                     "Description": (
@@ -122,7 +125,7 @@ def run_bidsify(
             dst_tsv = output_pet_dir / f"{name}.tsv"
             _convert_dat_to_tsv(src_dat, dst_tsv)
             if file_mappings is not None and dst_tsv.exists():
-                _record_mapping(file_mappings, src_dat, dst_tsv, workdir, args.output_dir)
+                _record_mapping(file_mappings, src_dat, dst_tsv, workdir, subject_outdir)
             _write_json(output_pet_dir / f"{name}.json", {
                 **sidecar,
                 "Description": f"ROI-level {meas} kinetic parameters from {model}",

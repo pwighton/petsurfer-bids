@@ -313,9 +313,14 @@ def run_report(
                     f'</div>'
                 )
 
+    # Build subject-level output directory path (parallel to workdir)
+    subject_outdir = output_dir / f"sub-{subject}"
+    if session:
+        subject_outdir = subject_outdir / f"ses-{session}"
+
     # Assemble full report
     summary_html = _build_summary_html(inputs, args, temps, template_warning)
-    about_html = _build_about_html(args, command_history, workdir, file_mappings)
+    about_html = _build_about_html(args, command_history, workdir, subject_outdir, file_mappings)
 
     _write_report_html(
         output_dir=output_dir,
@@ -684,6 +689,7 @@ def _build_about_html(
     args: Namespace,
     command_history: list[tuple[str, str]],
     workdir: Path | None = None,
+    subject_outdir: Path | None = None,
     file_mappings: list[tuple[str, str]] | None = None,
 ) -> str:
     """Build the About section HTML."""
@@ -700,16 +706,16 @@ def _build_about_html(
     else:
         cmds_cell = "<em>No commands recorded.</em>"
 
-    # Work directory cell
-    work_dir_cell = escape(str(args.work_dir))
+    # Work directory cell (subject-level workdir)
+    work_dir_cell = escape(str(workdir if workdir is not None else args.work_dir))
     if not args.nocleanup:
         work_dir_cell += (
             '<br><em>Note: work directory was cleaned up and is no longer available. '
             'Use --nocleanup to preserve work directory.</em>'
         )
 
-    # Output directory cell
-    output_dir_cell = escape(str(args.output_dir))
+    # Output directory cell (subject-level output dir)
+    output_dir_cell = escape(str(subject_outdir if subject_outdir is not None else args.output_dir))
 
     # File mapping cell
     if file_mappings:
