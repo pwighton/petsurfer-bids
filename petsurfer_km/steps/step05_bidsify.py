@@ -46,6 +46,7 @@ def run_bidsify(
     workdir: Path,
     command_history: list[tuple[str, str]],
     args: Namespace,
+    file_mappings: list[tuple[str, str]] | None = None,
 ) -> None:
     """Copy primary outputs to the output directory with BIDS-compliant names.
 
@@ -57,6 +58,7 @@ def run_bidsify(
         workdir: Working directory for this subject/session.
         command_history: List to append (description, command) tuples.
         args: Parsed command-line arguments.
+        file_mappings: Optional list to append (work_relative, output_relative) tuples.
     """
     logger.info(f"Writing BIDS outputs for {inputs.label}")
 
@@ -76,7 +78,11 @@ def run_bidsify(
         if vol_key in temps:
             fwhm = int(args.vol_fwhm)
             name = f"{prefix}_space-MNI152NLin2009cAsym_desc-sm{fwhm}_model-{model}_meas-{meas}_mimap"
-            _copy_nifti(temps[vol_key] / map_file, output_pet_dir / f"{name}.nii.gz")
+            src_nifti = temps[vol_key] / map_file
+            dst_nifti = output_pet_dir / f"{name}.nii.gz"
+            _copy_nifti(src_nifti, dst_nifti)
+            if file_mappings is not None and dst_nifti.exists():
+                _record_mapping(file_mappings, src_nifti, dst_nifti, workdir, args.output_dir)
             _write_json(output_pet_dir / f"{name}.json", {
                 **sidecar,
                 "Description": (
@@ -95,10 +101,11 @@ def run_bidsify(
                     f"{prefix}_hemi-{bids_hemi}_space-fsaverage"
                     f"_desc-sm{fwhm}_model-{model}_meas-{meas}_mimap"
                 )
-                _copy_nifti(
-                    temps[surf_key] / map_file,
-                    output_pet_dir / f"{name}.nii.gz",
-                )
+                src_nifti = temps[surf_key] / map_file
+                dst_nifti = output_pet_dir / f"{name}.nii.gz"
+                _copy_nifti(src_nifti, dst_nifti)
+                if file_mappings is not None and dst_nifti.exists():
+                    _record_mapping(file_mappings, src_nifti, dst_nifti, workdir, args.output_dir)
                 _write_json(output_pet_dir / f"{name}.json", {
                     **sidecar,
                     "Description": (
@@ -111,10 +118,11 @@ def run_bidsify(
         roi_key = f"{method}_roi_dir"
         if roi_key in temps:
             name = f"{prefix}_model-{model}_kinpar"
-            _convert_dat_to_tsv(
-                temps[roi_key] / roi_file,
-                output_pet_dir / f"{name}.tsv",
-            )
+            src_dat = temps[roi_key] / roi_file
+            dst_tsv = output_pet_dir / f"{name}.tsv"
+            _convert_dat_to_tsv(src_dat, dst_tsv)
+            if file_mappings is not None and dst_tsv.exists():
+                _record_mapping(file_mappings, src_dat, dst_tsv, workdir, args.output_dir)
             _write_json(output_pet_dir / f"{name}.json", {
                 **sidecar,
                 "Description": f"ROI-level {meas} kinetic parameters from {model}",
@@ -249,6 +257,25 @@ def _copy_nifti(src: Path, dest: Path) -> None:
         return
     shutil.copy2(src, dest)
     logger.info(f"  {dest.name}")
+
+
+def _record_mapping(
+    file_mappings: list[tuple[str, str]],
+    src: Path,
+    dest: Path,
+    workdir: Path,
+    output_dir: Path,
+) -> None:
+    """Append a (work-relative, output-relative) mapping entry."""
+    try:
+        work_rel = str(src.resolve().relative_to(workdir.resolve()))
+    except ValueError:
+        work_rel = str(src)
+    try:
+        out_rel = str(dest.resolve().relative_to(output_dir.resolve()))
+    except ValueError:
+        out_rel = str(dest)
+    file_mappings.append((work_rel, out_rel))
 
 
 def _convert_dat_to_tsv(src: Path, dest: Path) -> None:

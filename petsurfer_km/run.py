@@ -180,12 +180,15 @@ def process_subject(
     # Initialize command history for this subject
     command_history: list[tuple[str, str]] = []
 
+    # Initialize file mappings (work-relative -> output-relative)
+    file_mappings: list[tuple[str, str]] = []
+
     # Run processing steps
     run_preprocessing(subject, session, input_group, temps, subject_workdir, command_history)
     run_volumetric(subject, session, input_group, temps, subject_workdir, command_history, args)
     run_surface(subject, session, input_group, temps, subject_workdir, command_history, args)
     run_kinetic_modeling(subject, session, input_group, temps, subject_workdir, command_history, args)
-    
+
 
     logger.debug(f"Temporary files at the end of the processing steps for {input_group.label}: {temps}")
 
@@ -195,10 +198,10 @@ def process_subject(
             logger.debug(f"  {description}: {command}")
 
     # Copy files to output directory and BIDSify
-    run_bidsify(subject, session, input_group, temps, subject_workdir, command_history, args)
+    run_bidsify(subject, session, input_group, temps, subject_workdir, command_history, args, file_mappings)
 
     # Generate per-subject HTML report
-    run_report(subject, session, input_group, temps, subject_workdir, command_history, args)
+    run_report(subject, session, input_group, temps, subject_workdir, command_history, args, file_mappings)
 
 def ensure_fsaverage() -> None:
     """

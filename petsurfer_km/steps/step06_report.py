@@ -150,6 +150,7 @@ def run_report(
     workdir: Path,
     command_history: list[tuple[str, str]],
     args: Namespace,
+    file_mappings: list[tuple[str, str]] | None = None,
 ) -> None:
     """Generate an HTML report for a single subject/session.
 
@@ -161,6 +162,7 @@ def run_report(
         workdir: Working directory for this subject/session.
         command_history: List of (command, description) tuples.
         args: Parsed command-line arguments.
+        file_mappings: Optional list of (work_relative, output_relative) tuples.
     """
     label = f"sub-{subject}" + (f"_ses-{session}" if session else "")
     logger.info(f"Generating report for {label}")
@@ -313,7 +315,7 @@ def run_report(
 
     # Assemble full report
     summary_html = _build_summary_html(inputs, args, temps, template_warning)
-    about_html = _build_about_html(args, command_history)
+    about_html = _build_about_html(args, command_history, workdir, file_mappings)
 
     _write_report_html(
         output_dir=output_dir,
@@ -681,6 +683,8 @@ def _build_summary_html(
 def _build_about_html(
     args: Namespace,
     command_history: list[tuple[str, str]],
+    workdir: Path | None = None,
+    file_mappings: list[tuple[str, str]] | None = None,
 ) -> str:
     """Build the About section HTML."""
     cmd_line = " ".join(sys.argv) if sys.argv else "(unavailable)"
@@ -696,10 +700,42 @@ def _build_about_html(
     else:
         cmds_cell = "<em>No commands recorded.</em>"
 
+    # Work directory cell
+    work_dir_cell = escape(str(args.work_dir))
+    if not args.nocleanup:
+        work_dir_cell += (
+            '<br><em>Note: work directory was cleaned up and is no longer available. '
+            'Use --nocleanup to preserve work directory.</em>'
+        )
+
+    # Output directory cell
+    output_dir_cell = escape(str(args.output_dir))
+
+    # File mapping cell
+    if file_mappings:
+        mapping_rows = "\n".join(
+            f"<tr><td><code>{escape(work_rel)}</code></td>"
+            f"<td><code>{escape(out_rel)}</code></td></tr>"
+            for work_rel, out_rel in file_mappings
+        )
+        mapping_cell = (
+            '<div class="table-responsive">\n'
+            '<table class="table table-sm table-striped table-hover mb-0">\n'
+            "<thead><tr><th>Work Directory</th><th>Output Directory</th></tr></thead>\n"
+            f"<tbody>\n{mapping_rows}\n</tbody>\n"
+            "</table>\n"
+            "</div>"
+        )
+    else:
+        mapping_cell = "<em>No file mappings recorded.</em>"
+
     rows = [
         f"<tr><th>petsurfer-km version</th><td>{escape(__version__)}</td></tr>",
         f"<tr><th>Invocation Command</th><td><code>{escape(cmd_line)}</code></td></tr>",
         f"<tr><th>Commands Executed</th><td>{cmds_cell}</td></tr>",
+        f"<tr><th>Work Directory</th><td>{work_dir_cell}</td></tr>",
+        f"<tr><th>Output Directory</th><td>{output_dir_cell}</td></tr>",
+        f"<tr><th>File Mapping</th><td>{mapping_cell}</td></tr>",
     ]
     return (
         '<table class="table table-bordered">\n'
