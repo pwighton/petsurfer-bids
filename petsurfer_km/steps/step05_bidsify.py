@@ -7,6 +7,8 @@ with filenames following BEP023 (PET Preprocessing Derivatives) conventions:
   - ROI kinetic parameters (tabular): ``_kinpar.tsv`` + ``_kinpar.json``
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import shutil

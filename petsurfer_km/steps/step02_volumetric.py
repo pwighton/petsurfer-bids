@@ -1,5 +1,7 @@
 """Volumetric processing step for petsurfer-km."""
 
+from __future__ import annotations
+
 import logging
 from argparse import Namespace
 from pathlib import Path

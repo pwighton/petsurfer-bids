@@ -1,5 +1,7 @@
 """Preprocessing step for petsurfer-km (TAC extraction)."""
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
 

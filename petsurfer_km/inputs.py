@@ -1,5 +1,7 @@
 """Input file discovery and grouping using pybids."""
 
+from __future__ import annotations
+
 import json
 import logging
 import re

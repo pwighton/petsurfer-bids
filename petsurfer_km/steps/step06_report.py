@@ -12,6 +12,8 @@ Visualisations are created with nilearn and saved as SVG in
 ``<output_dir>/sub-XX/figures/``.
 """
 
+from __future__ import annotations
+
 import importlib.util
 import json
 import logging

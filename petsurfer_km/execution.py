@@ -1,5 +1,7 @@
 """Command execution utilities for petsurfer-km."""
 
+from __future__ import annotations
+
 import logging
 import subprocess
 from typing import NamedTuple
