@@ -49,6 +49,19 @@ Key capabilities
 * **Three-space approach** for voxel-wise work: cortical and subcortical GM analyzed separately
   (LH cortex, RH cortex, subcortical GM) to leverage surface-based operations.
 
+Development
+--------------------
+
+- Setup a [FreeSurfer 8.1.0+ environment](https://surfer.nmr.mgh.harvard.edu/fswiki/DownloadAndInstall)
+- Setup a python 3.8+ environment.  For example, using [miniforge](https://conda-forge.org/download/)
+
+```
+conda create -n petsurfer-bids python=3.8 -y
+conda activate petsurfer
+git clone git@github.com:freesurfer/petsurfer-bids.git
+cd petsurfer-bids
+pip install -e .
+```
 
 Recommended citation
 --------------------
