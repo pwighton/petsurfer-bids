@@ -30,6 +30,7 @@ dependencies = [
     "nilearn>=0.10.1",
     "matplotlib>=3.6",
     "templateflow>=23.1",
+    "typing-extensions<4.6.0",
 ]
 
 [project.optional-dependencies]
