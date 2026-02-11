@@ -7,4 +7,4 @@ build:
 	docker build -t $(IMAGE_NAME):$(TAG) .
 
 push:
-	docker push -t $(IMAGE_NAME):$(TAG)
+	docker push $(IMAGE_NAME):$(TAG)
