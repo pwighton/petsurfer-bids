@@ -41,6 +41,7 @@ dev = [
 
 [project.scripts]
 petsurfer-km = "petsurfer_km.run:main"
+petsurfer-km-foo = "petsurfer_km.run_group:main"
 tsv2petsurfer = "petsurfer_km.tsv2petsurfer:main"
 
 [project.urls]
