@@ -144,6 +144,18 @@ Examples:
         ),
     )
 
+    # Group analysis arguments
+    group_group = parser.add_argument_group("Group Analysis")
+    group_group.add_argument(
+        "--petsurfer-dir",
+        type=Path,
+        metavar="PATH",
+        help=(
+            "Directory containing participant-level petsurfer-km outputs. "
+            "Default: <bids_dir>/derivatives/petsurfer"
+        ),
+    )
+
     # Filtering arguments
     filter_group = parser.add_argument_group("Filtering")
     filter_group.add_argument(

@@ -36,7 +36,6 @@ from petsurfer_km.steps import (
 
 logger = logging.getLogger("petsurfer_km")
 
-
 def setup_logging(level: str) -> None:
     """
     Configure logging for petsurfer-km.
@@ -73,6 +72,15 @@ def validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser) -> 
         args: Parsed arguments namespace.
         parser: ArgumentParser instance for error reporting.
     """
+    # Group-level validation
+    if args.analysis_level == "group":
+        if not args.petsurfer_dir.exists():
+            parser.error(
+                f"petsurfer-dir does not exist: {args.petsurfer_dir}\n"
+                f"Participant-level analysis must be run first."
+            )
+        return
+
     # Check that tstar is provided for Logan methods
     logan_methods = {"logan", "logan-ma1"}
     selected_logan = logan_methods.intersection(args.km_method)
@@ -111,6 +119,10 @@ def validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser) -> 
 
 def set_defaults(args: argparse.Namespace) -> argparse.Namespace:
     """Set default values that depend on other arguments."""
+    # Set default petsurfer-dir
+    if args.petsurfer_dir is None:
+        args.petsurfer_dir = args.bids_dir / "derivatives" / "petsurfer"
+
     # Set default petprep-dir
     if args.petprep_dir is None:
         args.petprep_dir = args.bids_dir / "derivatives" / "petprep"
@@ -262,6 +274,15 @@ def ensure_fsaverage() -> None:
     logger.info("fsaverage copied successfully")
 
 
+def run_group(args: argparse.Namespace) -> int:
+    """Execute group-level analysis."""
+    logger.info(f"petsurfer_km version: {__version__}")
+    logger.info("Starting group-level analysis")
+    logger.info(f"PetSurfer participant-level directory: {args.petsurfer_dir}")
+    logger.error("Group-level analysis is not yet implemented")
+    return 1
+
+
 def run(args: argparse.Namespace) -> int:
     """
     Execute petsurfer-km processing.
@@ -273,6 +294,7 @@ def run(args: argparse.Namespace) -> int:
         Exit code (0 for success, non-zero for errors).
     """
     logger.info(f"petsurfer_km version: {__version__}")
+    logger.info("Starting participant-level analysis")
     logger.debug(f"BIDS directory: {args.bids_dir}")
     logger.debug(f"Output directory: {args.output_dir}")
     logger.debug(f"Analysis level: {args.analysis_level}")
@@ -290,10 +312,9 @@ def run(args: argparse.Namespace) -> int:
     logger.debug(f"Skip volumetric: {args.no_vol}")
     logger.debug(f"Skip surface: {args.no_surf}")
 
-    # Handle group-level analysis (not yet implemented)
+    # Handle group-level analysis
     if args.analysis_level == "group":
-        logger.error("Group-level analysis is not yet implemented")
-        return 1
+        return run_group(args)
 
     # Determine if input function is required (for Logan methods)
     logan_methods = {"logan", "logan-ma1"}
