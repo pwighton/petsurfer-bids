@@ -1,0 +1,10 @@
+{
+  "name": "custom",
+  "entities": [
+    {
+      "name": "meas",
+      "pattern": "meas-([A-Za-z0-9]+)",
+      "mandatory": false
+    }
+  ]
+}
