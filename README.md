@@ -2,13 +2,19 @@
 
 ## Table of Contents
 
-- [Overview](#key-capabilities)
+- [Overview](#overview)
 - [Usage](#usage)
+  - [Installation](#installation)
+  - [Participant-level analysis](#participant-level-analysis)
+  - [Group-level analysis](group-level-analysis)
 - [Key capabilities](#key-capabilities)
 - [Development](#development)
 - [Recommended citation](#recommended-citation)
 
 ## Overview
+
+- [Example participant-level HTML report](https://freesurfer.github.io/petsurfer-bids/sample/participant/sub-PS11_ses-baseline.html)
+- [Example participant-level HTML visualization](https://freesurfer.github.io/freebrowse/?nvd=https://raw.githubusercontent.com/pwighton/freebrowse-test-data/refs/heads/main/pet/petsurfer-bids/petsurfer-km.nvd)
 
 This project is an encapsulation of the functionality in PETsurfer
 within an easy-to-use BIDS app.  PETSurfer is a set of tools within
@@ -113,6 +119,9 @@ instructions.
 
 ### Participant-level analysis
 
+**TL;DR**: run `petsurfer-km --help` for usage instructions and point it to
+PETprep data that has been run using `--output-spaces MNI152NLin2009cAsym fsaverage`.
+
 PETsurfer-BIDS currently supports the following kinetic models:
 - MRTM1
 - MRTM2
@@ -157,13 +166,87 @@ For MRTM2 modelling, a comma seperated list of high-binding regions can be
 specified using the `--mrtm2-hb` flag (default: `Left-Putamen,Right-Putamen`)
 
 For both the `--mrtm1-ref` and `--mrtm2-hb` flags, the region names provided
-should correspond to colum heading names in the `*_tacs.tsv` outputs from ***
+should correspond to colum heading names in the `*_tacs.tsv` outputs from
 PETPrep.
 
 For Logan and Logan-MA1 modelling, PETsurfer-BIDS also relies on the outputs of
 [bloodstream](https://github.com/mathesong/bloodstream).  The location of the
 bloodstream output directory is by default assumed to be `<bids_dir>/derivatives/bloodstream`,
 however the location can be specified using the `--bloodstream-dir` flag.
+
+For Logan and Logan-MA1 modelling, the time to equilibration (t*) must be supplied
+in seconds using the `--tstar` flag.
+
+The `--pvc` flag selects which partial-volume-corrected output from PETPrep to
+use as input. Its value must match the `--pvc-method` value that was passed to
+PETPrep during preprocessing.
+
+Smoothing is specified as the full-width at half-maximum (FWHM) of a Gaussian
+kernel in mm: `--vol-fwhm` for volumetric analysis and `--surf-fwhm` for
+surface-based analysis.
+
+By default, all subject/session pairs found under `bids_dir` are processed.
+To limit what gets processed, pass a space-separated list to
+`--participant-label` and/or `--session-label`.
+
+PETsurfer-BIDS will create and use the folder `/tmp/petsurfer-km-<pid>` to store
+temporary files while processing.  This folder is deleted when PETsurfer-BIDS
+terminates.  To preserve this folder, use the `--nocleanup` flag.  To specify an
+alternate temporary folder, use the `--work-dir` flag.
+
+**Outputs**
+
+For each subject/session/kinetic-model combination, the following outputs will
+be generated and placed in the `<output_dir>/sub-<subid>/sess-<sessid>/pet/`
+directory:
+- `*_mimap.[json|nii.gz]`: A molucular imaging map of VT (`meas-VT`; for Logan and Logan-MA1 models)
+or BPND (`meas-BPND`; for MRTM1 or MRTM2 models) in:
+  - `MNI152NLin2009cAsym` space
+  - `fsaverage` space, left (`hemi-L`) and right (`hemi-R`) hemispheres
+- `*_kinpar.[json|tsv]`: model parameters averaged across the ROIs defined by PETprep
+
+An html report is also generated for each subject/session pair and placed in the 
+`<output_dir>/sub-<subid>/` folder.  Figures that this html report references are
+also placed in the `<output_dir>/sub-<subid>/sess-<sessid>/figures/` folder.
+
+By default, PETsurfer-BIDS will also generate browser-based visualizations for
+each volumetric analysis performed (visualizations for surface-based analyses 
+are coming soon!) using [FreeBrowse](https://freesurfer.github.io/freebrowse/). These are standalone HTML files that contain all of the code to render the visualzation as well as the data it visuazlised.
+See the [single HTML file build](https://github.com/freesurfer/freebrowse?tab=readme-ov-file#single-html-file)
+of FreeBrowse for further information.  **No data, imaging or otherwise, leaves
+your device when viewing these visualizations**.  The generation of FreeBrowse-based
+visualizations can be disabled with the `--no-freebrowse` flag.
+
+- [Example participant-level HTML report](https://freesurfer.github.io/petsurfer-bids/sample/participant/sub-PS11_ses-baseline.html)
+  - The `View results in freebrowse` links in this HTML report will not work because the data it references have not been uploaded to conserve space.  However the link below is an example of one such visualization.
+- [Example participant-level HTML visualization](https://freesurfer.github.io/freebrowse/?nvd=https://raw.githubusercontent.com/pwighton/freebrowse-test-data/refs/heads/main/pet/petsurfer-bids/petsurfer-km.nvd)
+
+**Example**
+
+The folllowing command will process the [`ds004230`](https://openneuro.org/datasets/ds004230)
+dataset using the Logan-MA1 model in apptainer.
+
+It assumes:
+- The petsurfer-bids container is located at `~/containers/petsurfer-bids-0.1.3.sif`
+  - The container can be downloaded using: `apptainer pull ~/containers/petsurfer-bids-0.1.3.sif docker://freesurfer/petsurfer-bids:0.1.3`
+- The `ds004230` dataset has been downloaded to `~/datasets/ds004230`
+- The output will be written to `~/datasets/petsurfer-bids/ds004230`
+- PETPrep has been run on this dataset with `--output-spaces MNI152NLin2009cAsym fsaverage`
+  and the output located is at `~/datasets/petprep/ds004230`
+- bloodstream has been run on this dataset and the output is located at `~/datasets/bloodstream/ds004230`
+- A FreeSurfer license file is located at `~/freesurfer/license.txt`
+- The time to equilibration (t*) is 540 seconds
+
+```
+apptainer run \
+  -B ~/datasets/ds004230:/data/input:ro \
+  -B ~/datasets/petsurfer-bids/ds004230:/data/output \
+  -B ~/freesurfer/license.txt:/usr/local/freesurfer/8.1.0-1/.license:ro \
+  ~/containers/petsurfer-bids-0.1.3.sif \
+    petsurfer-km /data/input /data/output participant \
+      --km-method logan-ma1 \
+      --tstar 540 \
+```
 
 ### Group-level analysis
 
@@ -186,5 +269,5 @@ pip install -e .
 
 If you use PETSurfer, please cite:
 
-* Greve, D.N., et al. (2014). *Cortical surface-based analysis reduces bias and variance in kinetic modeling of brain PET data.* NeuroImage, 92, 225-236.
-* Greve, D.N., et al. (2016). *Different partial volume correction methods lead to different conclusions: An 18F-FDG-PET study of aging.* NeuroImage, 132, 334-343.
+- Greve, D.N., et al. (2014). *Cortical surface-based analysis reduces bias and variance in kinetic modeling of brain PET data.* NeuroImage, 92, 225-236.
+- Greve, D.N., et al. (2016). *Different partial volume correction methods lead to different conclusions: An 18F-FDG-PET study of aging.* NeuroImage, 132, 334-343.
