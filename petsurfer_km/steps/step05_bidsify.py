@@ -135,7 +135,7 @@ def run_bidsify(
             name = f"{prefix}_model-{model}_kinpar"
             src_dat = temps[roi_key] / roi_file
             dst_tsv = output_pet_dir / f"{name}.tsv"
-            _convert_dat_to_tsv(src_dat, dst_tsv)
+            _convert_dat_to_tsv(src_dat, dst_tsv, method)
             if file_mappings is not None and dst_tsv.exists():
                 _record_mapping(file_mappings, src_dat, dst_tsv, workdir, subject_outdir)
             _write_json(output_pet_dir / f"{name}.json", {
@@ -293,24 +293,33 @@ def _record_mapping(
     file_mappings.append((work_rel, out_rel))
 
 
-def _convert_dat_to_tsv(src: Path, dest: Path) -> None:
+def _convert_dat_to_tsv(src: Path, dest: Path, method: str) -> None:
     """Convert a FreeSurfer ``.dat`` table to TSV format.
 
     Normalizes whitespace to tab separation and drops comment lines
-    (starting with ``#``).
+    (starting with ``#``). Ensures the first column header is ``ROI``:
+    MRTM gamma tables have ``frame_start`` as the first column header,
+    which is replaced; Logan/MA1/Patlak tables have no header row, so
+    one is prepended (``ROI`` + the model's primary measurement).
     """
     if not src.exists():
         logger.warning(f"Expected output not found, skipping: {src}")
         return
 
     with open(src) as f:
-        lines = f.readlines()
+        rows = [
+            line.strip().split()
+            for line in f
+            if line.strip() and not line.strip().startswith("#")
+        ]
+
+    if method in ("mrtm1", "mrtm2") and rows and rows[0][0] == "frame_start":
+        rows[0][0] = "ROI"
+    elif method in ("logan", "logan-ma1", "patlak"):
+        rows.insert(0, ["ROI", MEAS_LABELS[method]])
 
     with open(dest, "w") as f:
-        for line in lines:
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-            f.write("\t".join(stripped.split()) + "\n")
+        for row in rows:
+            f.write("\t".join(row) + "\n")
 
     logger.info(f"  {dest.name}")
